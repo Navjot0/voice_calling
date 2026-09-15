@@ -1,0 +1,43 @@
+package com.freeswitch.calling.controller;
+
+import com.freeswitch.calling.dto.CallResponse;
+import com.freeswitch.calling.dto.CreateCallRequest;
+import com.freeswitch.calling.dto.CreateCallResponse;
+import com.freeswitch.calling.service.VoiceCallService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * REST entry point for programmable call control.
+ *
+ * <p>This controller only translates HTTP requests to/from
+ * {@link VoiceCallService} calls - it never talks to FreeSWITCH directly.
+ */
+@RestController
+@RequestMapping("/api/v1/voice/calls")
+public class VoiceCallController {
+
+    private final VoiceCallService voiceCallService;
+
+    public VoiceCallController(VoiceCallService voiceCallService) {
+        this.voiceCallService = voiceCallService;
+    }
+
+    @PostMapping
+    public ResponseEntity<CreateCallResponse> createCall(@Valid @RequestBody CreateCallRequest request) {
+        CreateCallResponse response = voiceCallService.createOutboundCall(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{callId}")
+    public ResponseEntity<CallResponse> getCall(@PathVariable String callId) {
+        return ResponseEntity.ok(voiceCallService.getCall(callId));
+    }
+}
