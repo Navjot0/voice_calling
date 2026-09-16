@@ -181,6 +181,7 @@ public class FreeSwitchClient {
     private String buildDialString(String originationUuid, String from, String to) {
         FreeSwitchProperties.Originate cfg = properties.getOriginate();
         String originationLeg = cfg.getDialPrefix() + from;
+        int rtpTimeoutSeconds = cfg.getRtpTimeoutSeconds();
 
         // The {..} block below only applies channel variables to the leg FreeSWITCH
         // creates for the "originate" command itself (the leg to `from`). The
@@ -190,14 +191,28 @@ public class FreeSwitchClient {
         // i.e. the callee would see itself as the caller. Setting
         // origination_caller_id_number/_name explicitly on the bridge leg as well
         // ensures `to` sees `from` as the caller on both legs.
+        //
+        // rtp_timeout_sec/rtp_hold_timeout_sec are set on both legs for the same
+        // reason: a leg that drops silently - no SIP BYE ever reaches FreeSWITCH,
+        // e.g. a phone that loses its network mid-call - is otherwise only cleaned
+        // up by FreeSWITCH's own default media watchdog, which can take several
+        // minutes. During that window this API keeps reporting ANSWERED even
+        // though the call is actually over. Setting an explicit, short timeout
+        // here makes FreeSWITCH hang up (and CHANNEL_HANGUP_COMPLETE fire, and
+        // this API's status update) within rtpTimeoutSeconds of real media loss,
+        // regardless of whether either side ever sends a proper BYE.
         String bridgeLegVars = "[origination_caller_id_number=" + from
-                + ",origination_caller_id_name=" + cfg.getCallerIdName() + "]";
+                + ",origination_caller_id_name=" + cfg.getCallerIdName()
+                + ",rtp_timeout_sec=" + rtpTimeoutSeconds
+                + ",rtp_hold_timeout_sec=" + rtpTimeoutSeconds + "]";
         String bridgeLeg = bridgeLegVars + cfg.getDialPrefix() + to;
 
         String channelVariables = "{origination_uuid=" + originationUuid
                 + ",origination_caller_id_number=" + from
                 + ",origination_caller_id_name=" + cfg.getCallerIdName()
-                + ",ignore_early_media=true}";
+                + ",ignore_early_media=true"
+                + ",rtp_timeout_sec=" + rtpTimeoutSeconds
+                + ",rtp_hold_timeout_sec=" + rtpTimeoutSeconds + "}";
 
         return channelVariables + originationLeg + " &bridge(" + bridgeLeg + ")";
     }

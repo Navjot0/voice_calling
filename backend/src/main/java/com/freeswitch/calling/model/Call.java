@@ -43,6 +43,25 @@ public class Call {
         this.createdAt = Instant.now();
     }
 
+    /**
+     * Full-state constructor used to reconstruct a {@link Call} from
+     * previously persisted data (see {@code PersistentCallRepository}).
+     * Unlike the primary constructor, this does not stamp any timestamp
+     * itself - the caller supplies the exact previously recorded values, so
+     * reloading a call from storage never loses or overwrites its history.
+     */
+    public Call(String callId, String from, String to, CallDirection direction, CallStatus status,
+                Instant createdAt, Instant answeredAt, Instant completedAt) {
+        this.callId = callId;
+        this.from = from;
+        this.to = to;
+        this.direction = direction;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.answeredAt = answeredAt;
+        this.completedAt = completedAt;
+    }
+
     /** Moves the call into a non-terminal status (e.g. RINGING). No-op if the call has already terminated. */
     public synchronized void updateStatus(CallStatus newStatus) {
         if (isTerminal()) {

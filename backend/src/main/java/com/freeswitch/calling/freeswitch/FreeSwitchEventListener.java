@@ -26,6 +26,13 @@ import java.util.Set;
  * minimum event set required to track INITIATED -&gt; RINGING -&gt; ANSWERED
  * -&gt; COMPLETED/FAILED/BUSY/NO_ANSWER. The switch below is the seam for
  * adding more events later (e.g. for transfer, hold, mute).
+ *
+ * <p>Every state-changing branch calls {@link CallRepository#save} again
+ * after mutating the call. With the in-memory repository this was
+ * technically redundant (the map already holds the same object reference),
+ * but with a persistent, database-backed repository each transition must be
+ * explicitly re-saved to actually reach storage - so it is done
+ * unconditionally here rather than relying on the repository implementation.
  */
 @Component
 public class FreeSwitchEventListener implements IEslEventListener {
@@ -80,20 +87,24 @@ public class FreeSwitchEventListener implements IEslEventListener {
             case "CHANNEL_CREATE" -> {
                 log.info("Call channel created callId={}", callId);
                 call.updateStatus(CallStatus.INITIATED);
+                callRepository.save(call);
             }
             case "CHANNEL_PROGRESS" -> {
                 log.info("Call ringing callId={}", callId);
                 call.updateStatus(CallStatus.RINGING);
+                callRepository.save(call);
             }
             case "CHANNEL_ANSWER" -> {
                 log.info("Call answered callId={}", callId);
                 call.markAnswered();
+                callRepository.save(call);
             }
             case "CHANNEL_HANGUP" -> log.info("Call hangup signaled callId={} cause={}",
                     callId, headers.get("Hangup-Cause"));
             case "CHANNEL_HANGUP_COMPLETE" -> {
                 CallStatus terminalStatus = resolveTerminalStatus(call, headers.get("Hangup-Cause"));
                 call.markTerminal(terminalStatus);
+                callRepository.save(call);
                 log.info("Call completed callId={} status={} cause={}",
                         callId, terminalStatus, headers.get("Hangup-Cause"));
             }

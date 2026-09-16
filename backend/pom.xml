@@ -41,6 +41,18 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Persistence: call history is stored in PostgreSQL (see
+             PersistentCallRepository / CallEntity) instead of only in memory. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- FreeSWITCH Event Socket Library (ESL) Java client -->
         <dependency>
             <groupId>org.freeswitch.esl.client</groupId>
@@ -59,6 +71,17 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- In-memory database used only for tests (see
+             src/test/resources/application.yml), so `mvn test` never needs a
+             real PostgreSQL server running - the same "external services must
+             never break the build" approach already used for FreeSWITCH
+             (mocked ESL, opt-in-only live test). -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

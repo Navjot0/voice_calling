@@ -101,6 +101,17 @@ public class FreeSwitchProperties {
         /** Caller ID name set on the originating leg. */
         private String callerIdName = "CPaaS";
 
+        /**
+         * Seconds of no RTP media on a leg before FreeSWITCH hangs it up on its
+         * own, even if the far end never sends a proper SIP BYE (e.g. a phone
+         * that loses its network mid-call). Without this, a silently-dropped leg
+         * is only caught by FreeSWITCH's own, much longer, default media
+         * watchdog - which is why a call can otherwise sit as ANSWERED for
+         * several minutes after it actually ended before this API's status
+         * catches up.
+         */
+        private int rtpTimeoutSeconds = 30;
+
         public String getDialPrefix() {
             return dialPrefix;
         }
@@ -115,6 +126,14 @@ public class FreeSwitchProperties {
 
         public void setCallerIdName(String callerIdName) {
             this.callerIdName = callerIdName;
+        }
+
+        public int getRtpTimeoutSeconds() {
+            return rtpTimeoutSeconds;
+        }
+
+        public void setRtpTimeoutSeconds(int rtpTimeoutSeconds) {
+            this.rtpTimeoutSeconds = rtpTimeoutSeconds;
         }
     }
 
