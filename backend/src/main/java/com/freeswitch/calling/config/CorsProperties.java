@@ -16,12 +16,12 @@ public class CorsProperties {
 
     /**
      * Origins allowed to call the API from a browser - scheme + host + port,
-     * no path, no trailing slash (e.g. {@code http://localhost:5173}).
-     * Defaults to the frontend's local Vite dev server. Override with the
-     * {@code CORS_ALLOWED_ORIGINS} environment variable (comma-separated)
-     * per environment - never widen this to a wildcard in production.
+     * no path, no trailing slash (e.g. {@code http://localhost:5173}, or wildcard patterns
+     * like {@code *} or {@code http://192.168.*:*}).
+     * Defaults to {@code *} to allow local development and LAN browser access.
+     * Override with the {@code CORS_ALLOWED_ORIGINS} environment variable (comma-separated).
      */
-    private List<String> allowedOrigins = new ArrayList<>(List.of("http://localhost:5173"));
+    private List<String> allowedOrigins = new ArrayList<>(List.of("*"));
 
     public List<String> getAllowedOrigins() {
         return allowedOrigins;

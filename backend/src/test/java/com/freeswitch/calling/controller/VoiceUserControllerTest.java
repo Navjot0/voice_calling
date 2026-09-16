@@ -147,4 +147,25 @@ class VoiceUserControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value("VOICE_USER_PROTECTED"));
     }
+
+    @Test
+    void listUsers_corsOriginAllowed_returns200AndCorsHeaders() throws Exception {
+        when(voiceUserService.listUsers()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/voice/users")
+                        .header("Origin", "http://192.168.1.3:5173"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Access-Control-Allow-Origin", "http://192.168.1.3:5173"));
+    }
+
+    @Test
+    void preflight_corsOptionsRequest_returnsOkAndCorsHeaders() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/api/v1/voice/users")
+                        .header("Origin", "http://192.168.1.3:5173")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Access-Control-Allow-Origin", "http://192.168.1.3:5173"));
+    }
 }
