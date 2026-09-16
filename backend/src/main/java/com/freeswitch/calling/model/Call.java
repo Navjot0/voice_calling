@@ -33,6 +33,8 @@ public class Call {
     private volatile CallStatus status;
     private volatile Instant answeredAt;
     private volatile Instant completedAt;
+    private volatile String hangupCause;
+    private volatile String blegUuid;
 
     public Call(String callId, String from, String to, CallDirection direction, CallStatus initialStatus) {
         this.callId = callId;
@@ -41,25 +43,6 @@ public class Call {
         this.direction = direction;
         this.status = initialStatus;
         this.createdAt = Instant.now();
-    }
-
-    /**
-     * Full-state constructor used to reconstruct a {@link Call} from
-     * previously persisted data (see {@code PersistentCallRepository}).
-     * Unlike the primary constructor, this does not stamp any timestamp
-     * itself - the caller supplies the exact previously recorded values, so
-     * reloading a call from storage never loses or overwrites its history.
-     */
-    public Call(String callId, String from, String to, CallDirection direction, CallStatus status,
-                Instant createdAt, Instant answeredAt, Instant completedAt) {
-        this.callId = callId;
-        this.from = from;
-        this.to = to;
-        this.direction = direction;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.answeredAt = answeredAt;
-        this.completedAt = completedAt;
     }
 
     /** Moves the call into a non-terminal status (e.g. RINGING). No-op if the call has already terminated. */
@@ -79,12 +62,36 @@ public class Call {
         this.answeredAt = Instant.now();
     }
 
+    /**
+     * Records the FreeSWITCH-assigned UUID of the bridged destination leg
+     * (the {@code to} side), once known - see the {@code CHANNEL_BRIDGE}
+     * handling in {@code FreeSwitchEventListener}. No-op once already
+     * recorded or once the call has terminated.
+     */
+    public synchronized void recordBridgeLeg(String blegUuid) {
+        if (isTerminal() || this.blegUuid != null) {
+            return;
+        }
+        this.blegUuid = blegUuid;
+    }
+
     /** Moves the call into a terminal status and timestamps completion. Idempotent once terminal. */
     public synchronized void markTerminal(CallStatus terminalStatus) {
+        markTerminal(terminalStatus, null);
+    }
+
+    /**
+     * Moves the call into a terminal status, timestamps completion, and
+     * records the raw FreeSWITCH hangup cause (e.g. {@code NORMAL_CLEARING},
+     * {@code MEDIA_TIMEOUT}) for archival in the {@code cdr} table - see
+     * {@code PersistentCallRepository}. Idempotent once terminal.
+     */
+    public synchronized void markTerminal(CallStatus terminalStatus, String hangupCause) {
         if (isTerminal()) {
             return;
         }
         this.status = terminalStatus;
+        this.hangupCause = hangupCause;
         this.completedAt = Instant.now();
     }
 

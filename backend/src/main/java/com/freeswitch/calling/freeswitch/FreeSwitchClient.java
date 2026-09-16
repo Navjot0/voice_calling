@@ -35,7 +35,7 @@ public class FreeSwitchClient {
     private static final Logger log = LoggerFactory.getLogger(FreeSwitchClient.class);
 
     private static final String TRACKED_EVENTS =
-            "CHANNEL_CREATE CHANNEL_PROGRESS CHANNEL_ANSWER CHANNEL_HANGUP CHANNEL_HANGUP_COMPLETE BACKGROUND_JOB";
+            "CHANNEL_CREATE CHANNEL_PROGRESS CHANNEL_ANSWER CHANNEL_BRIDGE CHANNEL_HANGUP CHANNEL_HANGUP_COMPLETE BACKGROUND_JOB";
 
     private final FreeSwitchProperties properties;
     private final FreeSwitchEventListener eventListener;

@@ -61,10 +61,6 @@ public class VoiceCallService {
             freeSwitchClient.originate(callId, from, to);
         } catch (RuntimeException e) {
             call.markTerminal(CallStatus.FAILED);
-            // Must be re-saved explicitly: a persistent repository does not
-            // share this object's reference, so the FAILED status would
-            // otherwise never reach storage.
-            callRepository.save(call);
             log.error("Originate failed callId={} error={}", callId, e.getMessage());
             throw e;
         }

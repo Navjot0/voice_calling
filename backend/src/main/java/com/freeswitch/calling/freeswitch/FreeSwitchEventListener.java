@@ -3,6 +3,7 @@ package com.freeswitch.calling.freeswitch;
 import com.freeswitch.calling.model.Call;
 import com.freeswitch.calling.model.CallStatus;
 import com.freeswitch.calling.repository.CallRepository;
+import com.freeswitch.calling.repository.PersistentCallRepository;
 import org.freeswitch.esl.client.IEslEventListener;
 import org.freeswitch.esl.client.transport.event.EslEvent;
 import org.slf4j.Logger;
@@ -21,18 +22,13 @@ import java.util.Set;
  * the service layer) so that {@link FreeSwitchClient} can register this
  * listener without creating a circular bean dependency.
  *
- * <p>Only CHANNEL_CREATE, CHANNEL_PROGRESS, CHANNEL_ANSWER, CHANNEL_HANGUP
- * and CHANNEL_HANGUP_COMPLETE are handled for this step, matching the
- * minimum event set required to track INITIATED -&gt; RINGING -&gt; ANSWERED
- * -&gt; COMPLETED/FAILED/BUSY/NO_ANSWER. The switch below is the seam for
- * adding more events later (e.g. for transfer, hold, mute).
- *
- * <p>Every state-changing branch calls {@link CallRepository#save} again
- * after mutating the call. With the in-memory repository this was
- * technically redundant (the map already holds the same object reference),
- * but with a persistent, database-backed repository each transition must be
- * explicitly re-saved to actually reach storage - so it is done
- * unconditionally here rather than relying on the repository implementation.
+ * <p>CHANNEL_CREATE, CHANNEL_PROGRESS, CHANNEL_ANSWER and CHANNEL_BRIDGE
+ * update the call's live, in-memory state (see {@link CallRepository}); the
+ * switch below is the seam for adding more events later (e.g. for transfer,
+ * hold, mute). CHANNEL_HANGUP_COMPLETE both finalizes that live state and -
+ * exactly once, since a call-detail record is a one-time historical entry,
+ * not something updated afterward - archives the finished call via
+ * {@link PersistentCallRepository} into the pre-existing {@code cdr} table.
  */
 @Component
 public class FreeSwitchEventListener implements IEslEventListener {
@@ -43,9 +39,11 @@ public class FreeSwitchEventListener implements IEslEventListener {
             "NO_ANSWER", "NO_USER_RESPONSE", "ALLOTTED_TIMEOUT", "ORIGINATOR_CANCEL");
 
     private final CallRepository callRepository;
+    private final PersistentCallRepository cdrRecorder;
 
-    public FreeSwitchEventListener(CallRepository callRepository) {
+    public FreeSwitchEventListener(CallRepository callRepository, PersistentCallRepository cdrRecorder) {
         this.callRepository = callRepository;
+        this.cdrRecorder = cdrRecorder;
     }
 
     @Override
@@ -87,26 +85,39 @@ public class FreeSwitchEventListener implements IEslEventListener {
             case "CHANNEL_CREATE" -> {
                 log.info("Call channel created callId={}", callId);
                 call.updateStatus(CallStatus.INITIATED);
-                callRepository.save(call);
             }
             case "CHANNEL_PROGRESS" -> {
                 log.info("Call ringing callId={}", callId);
                 call.updateStatus(CallStatus.RINGING);
-                callRepository.save(call);
             }
             case "CHANNEL_ANSWER" -> {
                 log.info("Call answered callId={}", callId);
                 call.markAnswered();
-                callRepository.save(call);
+            }
+            case "CHANNEL_BRIDGE" -> {
+                // Other-Leg-Unique-ID on the A-leg's own CHANNEL_BRIDGE event is the
+                // FreeSWITCH-assigned UUID of the bridged `to` channel - captured here
+                // purely for the cdr table's bleg_uuid column, not used for lookups
+                // (this platform only ever tracks/finds calls by the A-leg's UUID).
+                String blegUuid = headers.get("Other-Leg-Unique-ID");
+                if (blegUuid != null) {
+                    log.info("Call bridged callId={} blegUuid={}", callId, blegUuid);
+                    call.recordBridgeLeg(blegUuid);
+                }
             }
             case "CHANNEL_HANGUP" -> log.info("Call hangup signaled callId={} cause={}",
                     callId, headers.get("Hangup-Cause"));
             case "CHANNEL_HANGUP_COMPLETE" -> {
-                CallStatus terminalStatus = resolveTerminalStatus(call, headers.get("Hangup-Cause"));
-                call.markTerminal(terminalStatus);
-                callRepository.save(call);
-                log.info("Call completed callId={} status={} cause={}",
-                        callId, terminalStatus, headers.get("Hangup-Cause"));
+                boolean alreadyTerminal = call.isTerminal();
+                String hangupCause = headers.get("Hangup-Cause");
+                CallStatus terminalStatus = resolveTerminalStatus(call, hangupCause);
+                call.markTerminal(terminalStatus, hangupCause);
+                log.info("Call completed callId={} status={} cause={}", callId, terminalStatus, hangupCause);
+                if (!alreadyTerminal) {
+                    // Exactly one CDR row per call, written only on the transition
+                    // into a terminal state - never on a possible duplicate event.
+                    cdrRecorder.record(call);
+                }
             }
             default -> {
                 // No-op: outside the tracked event set for this step.

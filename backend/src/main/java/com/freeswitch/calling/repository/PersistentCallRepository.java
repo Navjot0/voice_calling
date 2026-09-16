@@ -1,67 +1,75 @@
 package com.freeswitch.calling.repository;
 
+import com.freeswitch.calling.config.FreeSwitchProperties;
 import com.freeswitch.calling.entity.CallEntity;
 import com.freeswitch.calling.model.Call;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
-import java.util.Optional;
+import java.time.Duration;
+import java.time.Instant;
 
 /**
- * {@link CallRepository} backed by PostgreSQL via Spring Data JPA - the
- * application's active call-storage implementation, replacing the original
- * in-memory one so call history survives a restart and can be queried
- * directly from the database.
+ * Archives a finished call into the pre-existing {@code cdr} table, exactly
+ * once, when it reaches a terminal state - see the {@code CHANNEL_HANGUP_COMPLETE}
+ * handling in {@link com.freeswitch.calling.freeswitch.FreeSwitchEventListener}.
  *
- * <p>Converts between {@link Call} (the mutable domain object the rest of
- * the application works with) and {@link CallEntity} (the JPA mapping) on
- * every read and write. Unlike the in-memory repository it replaces, this
- * repository does not share object references with its callers: each
- * {@link #findById} returns a freshly reconstructed {@link Call}, so every
- * caller that mutates a call's state (see
- * {@link com.freeswitch.calling.freeswitch.FreeSwitchEventListener}) must
- * call {@link #save(Call)} again afterward to persist that change.
+ * <p>Deliberately <em>not</em> a {@link CallRepository}: live, in-progress
+ * call status (what {@code GET /api/v1/voice/calls/{callId}} reads) is
+ * served entirely from memory by {@link InMemoryCallRepository}. This class
+ * only ever writes, and only once per call, matching how a call-detail
+ * record is conventionally used - a historical record of a finished call,
+ * not a row this API updates afterward.
  */
-@Repository
-public class PersistentCallRepository implements CallRepository {
+@Component
+public class PersistentCallRepository {
 
     private final CallJpaRepository jpaRepository;
+    private final FreeSwitchProperties freeSwitchProperties;
 
-    public PersistentCallRepository(CallJpaRepository jpaRepository) {
+    public PersistentCallRepository(CallJpaRepository jpaRepository, FreeSwitchProperties freeSwitchProperties) {
         this.jpaRepository = jpaRepository;
+        this.freeSwitchProperties = freeSwitchProperties;
     }
 
-    @Override
-    public Call save(Call call) {
-        jpaRepository.save(toEntity(call));
-        return call;
-    }
+    /**
+     * Writes {@code call} to the {@code cdr} table. Must only be called once
+     * the call has reached a terminal state ({@link Call#isTerminal()}) -
+     * a CDR is a one-time historical record, never updated afterward.
+     */
+    public void record(Call call) {
+        Instant start = call.getCreatedAt();
+        Instant answered = call.getAnsweredAt();
+        Instant end = call.getCompletedAt();
 
-    @Override
-    public Optional<Call> findById(String callId) {
-        return jpaRepository.findById(callId).map(this::toDomain);
-    }
+        Integer duration = (start != null && end != null)
+                ? (int) Duration.between(start, end).getSeconds()
+                : null;
+        // billsec (billable seconds) is conventionally the answer-to-hangup
+        // span, 0 for a call that was never answered - not null, so an
+        // unanswered call still reports zero billable time rather than
+        // "unknown".
+        int billsec = (answered != null && end != null)
+                ? (int) Duration.between(answered, end).getSeconds()
+                : 0;
 
-    private CallEntity toEntity(Call call) {
-        return new CallEntity(
+        CallEntity entity = new CallEntity(
                 call.getCallId(),
+                freeSwitchProperties.getOriginate().getCallerIdName(),
                 call.getFrom(),
                 call.getTo(),
-                call.getDirection(),
-                call.getStatus(),
-                call.getCreatedAt(),
-                call.getAnsweredAt(),
-                call.getCompletedAt());
-    }
+                // context isn't tracked by this application (it only ever
+                // provisions/dials within FreeSWITCH's "default" directory
+                // context - see FreeSwitchProperties.Directory), so it's
+                // hard-coded here rather than left null.
+                "default",
+                start,
+                answered,
+                end,
+                duration,
+                billsec,
+                call.getHangupCause(),
+                call.getBlegUuid());
 
-    private Call toDomain(CallEntity entity) {
-        return new Call(
-                entity.getCallId(),
-                entity.getFromExtension(),
-                entity.getToExtension(),
-                entity.getDirection(),
-                entity.getStatus(),
-                entity.getCreatedAt(),
-                entity.getAnsweredAt(),
-                entity.getCompletedAt());
+        jpaRepository.save(entity);
     }
 }
