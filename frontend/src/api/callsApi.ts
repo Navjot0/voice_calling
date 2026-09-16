@@ -24,4 +24,15 @@ export const callsApi = {
     const { data } = await apiClient.get<CallResponse[]>("/calls");
     return data;
   },
+
+  /**
+   * POST /api/v1/voice/calls/{callId}/hangup - ends a call in progress.
+   * Returns the call's snapshot as of the moment FreeSWITCH accepted the
+   * hangup command, not its final state - keep polling with `useCallPolling`
+   * to see it actually land on COMPLETED/NO_ANSWER.
+   */
+  hangupCall: async (callId: string): Promise<CallResponse> => {
+    const { data } = await apiClient.post<CallResponse>(`/calls/${encodeURIComponent(callId)}/hangup`);
+    return data;
+  },
 };

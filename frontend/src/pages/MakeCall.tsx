@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { callsApi } from "../api/callsApi";
-import { useCallPolling } from "../hooks/useCalls";
+import { useCallPolling, useElapsedSeconds } from "../hooks/useCalls";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
 import { ApiRequestError } from "../types/api";
+import { isTerminalCallStatus } from "../types/call";
+import { formatDuration } from "../utils/formatters";
 
 const EXTENSION_PATTERN = /^[0-9]{2,15}$/;
 
@@ -21,8 +23,12 @@ export function MakeCall() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [hangingUp, setHangingUp] = useState(false);
+  const [hangupError, setHangupError] = useState<string | null>(null);
 
   const { call: polledCall } = useCallPolling(activeCallId);
+  const isLive = polledCall !== null && !isTerminalCallStatus(polledCall.status);
+  const liveSeconds = useElapsedSeconds(polledCall?.createdAt, isLive);
 
   const validate = (): boolean => {
     const errors: FieldErrors = {};
@@ -54,6 +60,7 @@ export function MakeCall() {
     }
 
     setSubmitting(true);
+    setHangupError(null);
     try {
       const response = await callsApi.createCall({ from: from.trim(), to: to.trim() });
       setActiveCallId(response.callId);
@@ -62,6 +69,24 @@ export function MakeCall() {
       setSubmitError(err instanceof ApiRequestError ? err.message : "Failed to start the call.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleHangup = async () => {
+    if (!activeCallId || hangingUp) {
+      return;
+    }
+    setHangingUp(true);
+    setHangupError(null);
+    try {
+      await callsApi.hangupCall(activeCallId);
+      // No local state update here - useCallPolling picks up the real
+      // terminal status (COMPLETED/NO_ANSWER) on its next poll, once
+      // FreeSWITCH's hangup event actually lands.
+    } catch (err) {
+      setHangupError(err instanceof ApiRequestError ? err.message : "Failed to hang up the call.");
+    } finally {
+      setHangingUp(false);
     }
   };
 
@@ -131,7 +156,9 @@ export function MakeCall() {
 
       {activeCallId && polledCall && (
         <section className="panel">
-          <h2>Call Status</h2>
+          <div className="panel-header">
+            <h2>{isLive ? "Live Call" : "Call Status"}</h2>
+          </div>
           <dl className="detail-list">
             <div>
               <dt>Call ID</dt>
@@ -151,10 +178,28 @@ export function MakeCall() {
                 <StatusBadge status={polledCall.status} kind="call" />
               </dd>
             </div>
+            <div>
+              <dt>{isLive ? "Live Duration" : "Duration"}</dt>
+              <dd>{isLive ? formatDuration(liveSeconds) : formatDuration(polledCall.duration)}</dd>
+            </div>
           </dl>
-          <Link to={`/calls/${activeCallId}`} className="btn btn-secondary">
-            View full details
-          </Link>
+
+          {hangupError && <ErrorMessage message={hangupError} />}
+
+          {isLive && (
+            <p className="panel-note">Status and duration update automatically every few seconds.</p>
+          )}
+
+          <div className="form-actions">
+            {isLive && (
+              <button type="button" className="btn btn-danger" onClick={handleHangup} disabled={hangingUp}>
+                {hangingUp ? "Hanging up..." : "Hangup"}
+              </button>
+            )}
+            <Link to={`/calls/${activeCallId}`} className="btn btn-secondary">
+              View full details
+            </Link>
+          </div>
         </section>
       )}
     </div>

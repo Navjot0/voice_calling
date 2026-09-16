@@ -119,3 +119,34 @@ export function useCallList(): UseCallListResult {
 
   return { calls, loading, error, refresh: fetchList };
 }
+
+/**
+ * Whole seconds elapsed since `startIso`, ticking up once a second for as
+ * long as `active` is true - so a live call's duration visibly counts up
+ * between each ~2.5s `useCallPolling` refresh instead of only jumping every
+ * few seconds. Returns `null` once `active` goes false (show the call's
+ * final `duration`/`billsec` from the API instead) or while `startIso`
+ * isn't known yet.
+ */
+export function useElapsedSeconds(startIso: string | null | undefined, active: boolean): number | null {
+  const [elapsed, setElapsed] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!startIso || !active) {
+      setElapsed(null);
+      return;
+    }
+    const startMs = new Date(startIso).getTime();
+    if (Number.isNaN(startMs)) {
+      setElapsed(null);
+      return;
+    }
+
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [startIso, active]);
+
+  return elapsed;
+}

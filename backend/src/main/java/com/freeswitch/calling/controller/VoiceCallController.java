@@ -52,4 +52,15 @@ public class VoiceCallController {
     public ResponseEntity<List<CallResponse>> listCalls() {
         return ResponseEntity.ok(voiceCallService.listCalls());
     }
+
+    /**
+     * Ends a call in progress. Accepted (202) rather than OK, since this only
+     * confirms FreeSWITCH accepted the hangup command - the call's actual
+     * terminal status arrives asynchronously and is only visible via a
+     * subsequent {@link #getCall} once it lands.
+     */
+    @PostMapping("/{callId}/hangup")
+    public ResponseEntity<CallResponse> hangupCall(@PathVariable String callId) {
+        return ResponseEntity.accepted().body(voiceCallService.hangupCall(callId));
+    }
 }

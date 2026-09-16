@@ -97,4 +97,31 @@ public class VoiceCallService {
     public List<CallResponse> listCalls() {
         return cdrRepository.findCallHistory();
     }
+
+    /**
+     * Ends a call in progress. Only ever looks at the live, in-memory store -
+     * unlike {@link #getCall}, this deliberately does not fall back to the
+     * {@code cdr} archive, since a call that has fallen out of memory (e.g.
+     * after an application restart) has no ESL channel this instance can
+     * confirm is even still its own to hang up.
+     *
+     * <p>Idempotent: hanging up a call that has already reached a terminal
+     * state is a no-op rather than an error, so a double click or a race with
+     * the call ending naturally doesn't surface a spurious failure.
+     *
+     * <p>Returns the call's snapshot as of the moment the hangup command was
+     * accepted - not its final state, which arrives asynchronously once
+     * FreeSWITCH's {@code CHANNEL_HANGUP_COMPLETE} event reaches
+     * {@code FreeSwitchEventListener}; poll {@link #getCall} to observe it.
+     */
+    public CallResponse hangupCall(String callId) {
+        Call call = callRepository.findById(callId)
+                .orElseThrow(() -> new CallNotFoundException(callId));
+
+        if (!call.isTerminal()) {
+            log.info("Hanging up call callId={}", callId);
+            freeSwitchClient.hangup(callId);
+        }
+        return CallResponse.from(call);
+    }
 }

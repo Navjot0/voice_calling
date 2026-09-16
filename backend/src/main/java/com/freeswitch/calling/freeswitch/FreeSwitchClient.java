@@ -164,6 +164,30 @@ public class FreeSwitchClient {
         }
     }
 
+    /**
+     * Hangs up a call in progress via FreeSWITCH's {@code uuid_kill} api
+     * command. {@code ORIGINATOR_CANCEL} is used as the hangup cause
+     * regardless of whether the call has been answered yet -
+     * {@link com.freeswitch.calling.model.CallStatus#resolveTerminal} maps it
+     * to {@code COMPLETED} for an answered call and {@code NO_ANSWER} for one
+     * still ringing, which is the correct outcome either way.
+     *
+     * <p>This only sends the command; it does not itself change the call's
+     * tracked status. FreeSWITCH's own {@code CHANNEL_HANGUP_COMPLETE} event
+     * fires moments later exactly as it would for any other hangup, and
+     * {@code FreeSwitchEventListener} finalizes the call from that, keeping a
+     * single code path for every way a call can end.
+     */
+    public void hangup(String callId) {
+        log.info("Sending hangup command callId={}", callId);
+        String response = executeSyncApi("uuid_kill", callId + " ORIGINATOR_CANCEL");
+        if (response == null || !response.trim().startsWith("+OK")) {
+            throw new FreeSwitchOperationException(
+                    "FreeSWITCH rejected hangup command for callId=" + callId + ": " + response);
+        }
+        log.info("Hangup command accepted callId={}", callId);
+    }
+
     private Client getConnectedClient() {
         if (!isConnected()) {
             log.warn("FreeSWITCH ESL not connected - attempting reconnect before sending command");

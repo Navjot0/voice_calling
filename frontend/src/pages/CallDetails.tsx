@@ -1,14 +1,37 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useCallPolling } from "../hooks/useCalls";
+import { callsApi } from "../api/callsApi";
+import { useCallPolling, useElapsedSeconds } from "../hooks/useCalls";
 import { Loading } from "../components/Loading";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
 import { formatDateTime, formatDuration } from "../utils/formatters";
 import { isTerminalCallStatus } from "../types/call";
+import { ApiRequestError } from "../types/api";
 
 export function CallDetails() {
   const { callId } = useParams<{ callId: string }>();
   const { call, loading, error } = useCallPolling(callId ?? null);
+  const [hangingUp, setHangingUp] = useState(false);
+  const [hangupError, setHangupError] = useState<string | null>(null);
+
+  const isLive = call !== null && !isTerminalCallStatus(call.status);
+  const liveSeconds = useElapsedSeconds(call?.createdAt, isLive);
+
+  const handleHangup = async () => {
+    if (!callId || hangingUp) {
+      return;
+    }
+    setHangingUp(true);
+    setHangupError(null);
+    try {
+      await callsApi.hangupCall(callId);
+    } catch (err) {
+      setHangupError(err instanceof ApiRequestError ? err.message : "Failed to hang up the call.");
+    } finally {
+      setHangingUp(false);
+    }
+  };
 
   if (!callId) {
     return <ErrorMessage message="No call ID was provided." />;
@@ -67,17 +90,28 @@ export function CallDetails() {
               <dd>{formatDateTime(call.completedAt)}</dd>
             </div>
             <div>
-              <dt>Duration</dt>
-              <dd>{formatDuration(call.duration)}</dd>
+              <dt>{isLive ? "Live Duration" : "Duration"}</dt>
+              <dd>{isLive ? formatDuration(liveSeconds) : formatDuration(call.duration)}</dd>
             </div>
-            <div>
-              <dt>Billsec</dt>
-              <dd>{formatDuration(call.billsec)}</dd>
-            </div>
+            {!isLive && (
+              <div>
+                <dt>Billsec</dt>
+                <dd>{formatDuration(call.billsec)}</dd>
+              </div>
+            )}
           </dl>
 
-          {!isTerminalCallStatus(call.status) && (
-            <p className="panel-note">This call is still in progress - status updates automatically every few seconds.</p>
+          {hangupError && <ErrorMessage message={hangupError} />}
+
+          {isLive && (
+            <>
+              <p className="panel-note">This call is still in progress - status updates automatically every few seconds.</p>
+              <div className="form-actions">
+                <button type="button" className="btn btn-danger" onClick={handleHangup} disabled={hangingUp}>
+                  {hangingUp ? "Hanging up..." : "Hangup"}
+                </button>
+              </div>
+            </>
           )}
         </section>
       )}

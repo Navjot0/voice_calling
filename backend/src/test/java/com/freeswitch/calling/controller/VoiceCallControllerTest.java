@@ -119,4 +119,25 @@ class VoiceCallControllerTest {
                 .andExpect(jsonPath("$[1].status").value("NO_ANSWER"))
                 .andExpect(jsonPath("$[1].billsec").value(0));
     }
+
+    @Test
+    void hangupCall_returns202WithSnapshot() throws Exception {
+        when(voiceCallService.hangupCall(eq("call-uuid-1"))).thenReturn(new CallResponse(
+                "call-uuid-1", CallStatus.ANSWERED, "1001", "1002", CallDirection.OUTBOUND,
+                Instant.parse("2026-09-14T10:00:00Z"), Instant.parse("2026-09-14T10:00:05Z"), null, null, null));
+
+        mockMvc.perform(post("/api/v1/voice/calls/call-uuid-1/hangup"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.callId").value("call-uuid-1"))
+                .andExpect(jsonPath("$.status").value("ANSWERED"));
+    }
+
+    @Test
+    void hangupCall_returns404WhenNotFound() throws Exception {
+        when(voiceCallService.hangupCall(eq("missing"))).thenThrow(new CallNotFoundException("missing"));
+
+        mockMvc.perform(post("/api/v1/voice/calls/missing/hangup"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("CALL_NOT_FOUND"));
+    }
 }

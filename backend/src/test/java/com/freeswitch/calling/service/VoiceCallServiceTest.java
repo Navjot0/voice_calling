@@ -120,6 +120,37 @@ class VoiceCallServiceTest {
     }
 
     @Test
+    void hangupCall_sendsHangupForInProgressCall() {
+        CreateCallResponse created = voiceCallService.createOutboundCall(new CreateCallRequest("1001", "1002"));
+
+        CallResponse response = voiceCallService.hangupCall(created.callId());
+
+        verify(freeSwitchClient).hangup(created.callId());
+        // The actual terminal status arrives later via FreeSwitchEventListener,
+        // once FreeSWITCH's CHANNEL_HANGUP_COMPLETE event lands - this call is
+        // still INITIATED (the state createOutboundCall left it in) at the
+        // moment the hangup command was merely accepted.
+        assertThat(response.status()).isEqualTo(CallStatus.INITIATED);
+    }
+
+    @Test
+    void hangupCall_throwsWhenCallIdUnknown() {
+        assertThatThrownBy(() -> voiceCallService.hangupCall("does-not-exist"))
+                .isInstanceOf(CallNotFoundException.class);
+    }
+
+    @Test
+    void hangupCall_isNoOpForAlreadyTerminalCall() {
+        CreateCallResponse created = voiceCallService.createOutboundCall(new CreateCallRequest("1001", "1002"));
+        callRepository.findById(created.callId()).orElseThrow().markTerminal(CallStatus.COMPLETED);
+
+        CallResponse response = voiceCallService.hangupCall(created.callId());
+
+        verify(freeSwitchClient, org.mockito.Mockito.never()).hangup(anyString());
+        assertThat(response.status()).isEqualTo(CallStatus.COMPLETED);
+    }
+
+    @Test
     void listCalls_delegatesToCdrRepository() {
         CallResponse historical = new CallResponse("call-uuid-9", CallStatus.COMPLETED, "1001", "1002",
                 CallDirection.OUTBOUND, java.time.Instant.now(), java.time.Instant.now(), java.time.Instant.now(),
