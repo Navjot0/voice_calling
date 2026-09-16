@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 
@@ -100,6 +101,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ProtectedVoiceUserException.class)
     public ResponseEntity<ApiError> handleProtectedVoiceUser(ProtectedVoiceUserException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "VOICE_USER_PROTECTED", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoStaticResource(NoResourceFoundException ex, HttpServletRequest request) {
+        // Thrown for any request that doesn't match a controller mapping or a
+        // static resource - most commonly a browser's automatic /favicon.ico
+        // request, since this API serves no static content. A routine 404,
+        // not an application error, so it's logged at DEBUG rather than the
+        // ERROR + stack trace the Exception.class catch-all below would give it.
+        log.debug("No resource for {}", request.getRequestURI());
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found", request);
     }
 
     @ExceptionHandler(Exception.class)
