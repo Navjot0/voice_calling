@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -98,5 +99,21 @@ class VoiceCallControllerTest {
         mockMvc.perform(get("/api/v1/voice/calls/missing"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("CALL_NOT_FOUND"));
+    }
+
+    @Test
+    void listCalls_returnsHistoryNewestFirst() throws Exception {
+        when(voiceCallService.listCalls()).thenReturn(List.of(
+                new CallResponse("call-uuid-2", CallStatus.COMPLETED, "1001", "1002", CallDirection.OUTBOUND,
+                        Instant.parse("2026-09-14T11:00:00Z"), Instant.parse("2026-09-14T11:00:05Z"),
+                        Instant.parse("2026-09-14T11:01:00Z")),
+                new CallResponse("call-uuid-1", CallStatus.NO_ANSWER, "1001", "1003", CallDirection.OUTBOUND,
+                        Instant.parse("2026-09-14T10:00:00Z"), null, Instant.parse("2026-09-14T10:00:30Z"))));
+
+        mockMvc.perform(get("/api/v1/voice/calls"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$[0].callId").value("call-uuid-2"))
+                .andExpect(jsonPath("$[1].status").value("NO_ANSWER"));
     }
 }

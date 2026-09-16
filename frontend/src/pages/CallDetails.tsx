@@ -1,6 +1,5 @@
-import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useCallHistory, useCallPolling } from "../hooks/useCalls";
+import { useCallPolling } from "../hooks/useCalls";
 import { Loading } from "../components/Loading";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
@@ -10,13 +9,6 @@ import { isTerminalCallStatus } from "../types/call";
 export function CallDetails() {
   const { callId } = useParams<{ callId: string }>();
   const { call, loading, error } = useCallPolling(callId ?? null);
-  const { updateCallStatus } = useCallHistory();
-
-  useEffect(() => {
-    if (call) {
-      updateCallStatus(call.callId, call.status);
-    }
-  }, [call, updateCallStatus]);
 
   if (!callId) {
     return <ErrorMessage message="No call ID was provided." />;

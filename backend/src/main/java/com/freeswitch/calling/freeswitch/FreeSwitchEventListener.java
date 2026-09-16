@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Translates raw FreeSWITCH channel events into {@link Call} state
@@ -34,9 +33,6 @@ import java.util.Set;
 public class FreeSwitchEventListener implements IEslEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(FreeSwitchEventListener.class);
-
-    private static final Set<String> NO_ANSWER_CAUSES = Set.of(
-            "NO_ANSWER", "NO_USER_RESPONSE", "ALLOTTED_TIMEOUT", "ORIGINATOR_CANCEL");
 
     private final CallRepository callRepository;
     private final PersistentCallRepository cdrRecorder;
@@ -110,7 +106,7 @@ public class FreeSwitchEventListener implements IEslEventListener {
             case "CHANNEL_HANGUP_COMPLETE" -> {
                 boolean alreadyTerminal = call.isTerminal();
                 String hangupCause = headers.get("Hangup-Cause");
-                CallStatus terminalStatus = resolveTerminalStatus(call, hangupCause);
+                CallStatus terminalStatus = CallStatus.resolveTerminal(call.getAnsweredAt() != null, hangupCause);
                 call.markTerminal(terminalStatus, hangupCause);
                 log.info("Call completed callId={} status={} cause={}", callId, terminalStatus, hangupCause);
                 if (!alreadyTerminal) {
@@ -123,21 +119,5 @@ public class FreeSwitchEventListener implements IEslEventListener {
                 // No-op: outside the tracked event set for this step.
             }
         }
-    }
-
-    private CallStatus resolveTerminalStatus(Call call, String hangupCause) {
-        if (call.getAnsweredAt() != null) {
-            return CallStatus.COMPLETED;
-        }
-        if (hangupCause == null) {
-            return CallStatus.FAILED;
-        }
-        if ("USER_BUSY".equals(hangupCause)) {
-            return CallStatus.BUSY;
-        }
-        if (NO_ANSWER_CAUSES.contains(hangupCause)) {
-            return CallStatus.NO_ANSWER;
-        }
-        return CallStatus.FAILED;
     }
 }

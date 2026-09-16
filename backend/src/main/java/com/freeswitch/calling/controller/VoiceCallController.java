@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * REST entry point for programmable call control.
  *
@@ -39,5 +41,15 @@ public class VoiceCallController {
     @GetMapping("/{callId}")
     public ResponseEntity<CallResponse> getCall(@PathVariable String callId) {
         return ResponseEntity.ok(voiceCallService.getCall(callId));
+    }
+
+    /**
+     * Call history from the {@code cdr} table, most recently started first.
+     * Only finished calls appear here - a call still in progress isn't
+     * archived yet, so use {@link #getCall} for its live status.
+     */
+    @GetMapping
+    public ResponseEntity<List<CallResponse>> listCalls() {
+        return ResponseEntity.ok(voiceCallService.listCalls());
     }
 }

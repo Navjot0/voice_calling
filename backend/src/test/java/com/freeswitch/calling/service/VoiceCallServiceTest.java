@@ -11,9 +11,12 @@ import com.freeswitch.calling.model.CallDirection;
 import com.freeswitch.calling.model.CallStatus;
 import com.freeswitch.calling.repository.CallRepository;
 import com.freeswitch.calling.repository.InMemoryCallRepository;
+import com.freeswitch.calling.repository.PersistentCallRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,18 +24,21 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class VoiceCallServiceTest {
 
     private FreeSwitchClient freeSwitchClient;
     private CallRepository callRepository;
+    private PersistentCallRepository cdrRepository;
     private VoiceCallService voiceCallService;
 
     @BeforeEach
     void setUp() {
         freeSwitchClient = mock(FreeSwitchClient.class);
         callRepository = new InMemoryCallRepository();
-        voiceCallService = new VoiceCallService(freeSwitchClient, callRepository);
+        cdrRepository = mock(PersistentCallRepository.class);
+        voiceCallService = new VoiceCallService(freeSwitchClient, callRepository, cdrRepository);
     }
 
     @Test
@@ -96,5 +102,16 @@ class VoiceCallServiceTest {
         assertThat(fetched.createdAt()).isNotNull();
         assertThat(fetched.answeredAt()).isNull();
         assertThat(fetched.completedAt()).isNull();
+    }
+
+    @Test
+    void listCalls_delegatesToCdrRepository() {
+        CallResponse historical = new CallResponse("call-uuid-9", CallStatus.COMPLETED, "1001", "1002",
+                CallDirection.OUTBOUND, java.time.Instant.now(), java.time.Instant.now(), java.time.Instant.now());
+        when(cdrRepository.findCallHistory()).thenReturn(List.of(historical));
+
+        List<CallResponse> result = voiceCallService.listCalls();
+
+        assertThat(result).containsExactly(historical);
     }
 }

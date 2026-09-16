@@ -15,11 +15,10 @@ export const callsApi = {
   },
 
   /**
-   * The backend does not currently expose `GET /api/v1/voice/calls` (a list
-   * endpoint) - see VoiceCallController. This is intentionally unused today;
-   * it exists so the Calls page can be pointed at a real list with a
-   * one-line change once the backend adds one, instead of the frontend
-   * inventing an endpoint that doesn't exist.
+   * GET /api/v1/voice/calls - call history from the backend's `cdr` table,
+   * most recently started first. Only calls that have already completed
+   * appear here; an in-progress call isn't archived yet, so its live status
+   * comes from `getCall` instead (see `useCallPolling`).
    */
   listCalls: async (): Promise<CallResponse[]> => {
     const { data } = await apiClient.get<CallResponse[]>("/calls");

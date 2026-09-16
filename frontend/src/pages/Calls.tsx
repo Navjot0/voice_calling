@@ -1,54 +1,26 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useCallHistory } from "../hooks/useCalls";
-import { callsApi } from "../api/callsApi";
+import { useCallList } from "../hooks/useCalls";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorMessage } from "../components/ErrorMessage";
+import { Loading } from "../components/Loading";
 import { formatDateTime } from "../utils/formatters";
-import { isTerminalCallStatus, type CallStatus } from "../types/call";
+import type { CallStatus } from "../types/call";
 
-const STATUS_OPTIONS: Array<CallStatus | "ALL"> = [
-  "ALL",
-  "INITIATED",
-  "RINGING",
-  "ANSWERED",
-  "COMPLETED",
-  "FAILED",
-  "BUSY",
-  "NO_ANSWER",
-];
+const STATUS_OPTIONS: Array<CallStatus | "ALL"> = ["ALL", "COMPLETED", "FAILED", "BUSY", "NO_ANSWER"];
 
 export function Calls() {
-  const { history, updateCallStatus } = useCallHistory();
+  const { calls, loading, error, refresh } = useCallList();
   const [statusFilter, setStatusFilter] = useState<CallStatus | "ALL">("ALL");
   const [extensionFilter, setExtensionFilter] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const filteredCalls = useMemo(() => {
     const needle = extensionFilter.trim();
-    return [...history]
+    return calls
       .filter((call) => statusFilter === "ALL" || call.status === statusFilter)
-      .filter((call) => !needle || call.from.includes(needle) || call.to.includes(needle))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [history, statusFilter, extensionFilter]);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    setRefreshError(null);
-    const nonTerminal = history.filter((call) => !isTerminalCallStatus(call.status));
-    const results = await Promise.allSettled(
-      nonTerminal.map(async (call) => {
-        const latest = await callsApi.getCall(call.callId);
-        updateCallStatus(call.callId, latest.status);
-      })
-    );
-    if (results.some((result) => result.status === "rejected")) {
-      setRefreshError("Some calls could not be refreshed. They may still be in progress.");
-    }
-    setRefreshing(false);
-  };
+      .filter((call) => !needle || call.from.includes(needle) || call.to.includes(needle));
+  }, [calls, statusFilter, extensionFilter]);
 
   return (
     <div className="page">
@@ -56,7 +28,8 @@ export function Calls() {
         <div>
           <h1>Calls</h1>
           <p className="page-subtitle">
-            Calls initiated from this browser. Wire this up to a backend list endpoint once one exists.
+            Completed call history, most recent first. A call still in progress appears on its own details page
+            until it ends.
           </p>
         </div>
         <div className="page-actions">
@@ -88,17 +61,19 @@ export function Calls() {
           />
         </label>
 
-        <button type="button" className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? "Refreshing..." : "Refresh"}
+        <button type="button" className="btn btn-secondary" onClick={refresh} disabled={loading}>
+          {loading ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 
-      {refreshError && <ErrorMessage message={refreshError} />}
+      {error && <ErrorMessage message={error} onRetry={refresh} />}
 
-      {filteredCalls.length === 0 ? (
+      {loading && calls.length === 0 && <Loading label="Loading call history..." />}
+
+      {!loading && filteredCalls.length === 0 ? (
         <EmptyState
           title="No calls found."
-          description="Try adjusting your filters, or make a new call."
+          description="Try adjusting your filters, or make a new call. Only completed calls appear here."
           action={
             <Link to="/calls/new" className="btn btn-primary">
               Make Call
@@ -106,40 +81,42 @@ export function Calls() {
           }
         />
       ) : (
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Call ID</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCalls.map((call) => (
-                <tr key={call.callId}>
-                  <td data-label="Call ID" className="mono">
-                    {call.callId}
-                  </td>
-                  <td data-label="From">{call.from}</td>
-                  <td data-label="To">{call.to}</td>
-                  <td data-label="Status">
-                    <StatusBadge status={call.status} kind="call" />
-                  </td>
-                  <td data-label="Created">{formatDateTime(call.createdAt)}</td>
-                  <td data-label="Actions">
-                    <Link to={`/calls/${call.callId}`} className="btn btn-small">
-                      View
-                    </Link>
-                  </td>
+        filteredCalls.length > 0 && (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Call ID</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Status</th>
+                  <th>Started</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredCalls.map((call) => (
+                  <tr key={call.callId}>
+                    <td data-label="Call ID" className="mono">
+                      {call.callId}
+                    </td>
+                    <td data-label="From">{call.from}</td>
+                    <td data-label="To">{call.to}</td>
+                    <td data-label="Status">
+                      <StatusBadge status={call.status} kind="call" />
+                    </td>
+                    <td data-label="Started">{formatDateTime(call.createdAt)}</td>
+                    <td data-label="Actions">
+                      <Link to={`/calls/${call.callId}`} className="btn btn-small">
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
     </div>
   );

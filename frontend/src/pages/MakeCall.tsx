@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { callsApi } from "../api/callsApi";
-import { useCallHistory, useCallPolling } from "../hooks/useCalls";
+import { useCallPolling } from "../hooks/useCalls";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
 import { ApiRequestError } from "../types/api";
@@ -14,8 +14,6 @@ interface FieldErrors {
 }
 
 export function MakeCall() {
-  const { recordCall, updateCallStatus } = useCallHistory();
-
   const [from, setFrom] = useState("1001");
   const [to, setTo] = useState("1002");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -25,13 +23,6 @@ export function MakeCall() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const { call: polledCall } = useCallPolling(activeCallId);
-
-  // Keep the local call log in sync with the live polled status.
-  useEffect(() => {
-    if (polledCall) {
-      updateCallStatus(polledCall.callId, polledCall.status);
-    }
-  }, [polledCall, updateCallStatus]);
 
   const validate = (): boolean => {
     const errors: FieldErrors = {};
@@ -65,13 +56,6 @@ export function MakeCall() {
     setSubmitting(true);
     try {
       const response = await callsApi.createCall({ from: from.trim(), to: to.trim() });
-      recordCall({
-        callId: response.callId,
-        from: response.from,
-        to: response.to,
-        direction: response.direction,
-        status: response.status,
-      });
       setActiveCallId(response.callId);
       setSuccessMessage("Call initiated successfully.");
     } catch (err) {

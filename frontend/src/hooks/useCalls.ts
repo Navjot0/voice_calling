@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { callsApi } from "../api/callsApi";
 import { ApiRequestError } from "../types/api";
-import { isTerminalCallStatus, type CallDirection, type CallResponse, type CallStatus } from "../types/call";
+import { isTerminalCallStatus, type CallResponse } from "../types/call";
 
 const POLL_INTERVAL_MS = 2500;
 
@@ -81,81 +81,41 @@ export function useCallPolling(callId: string | null): UseCallPollingResult {
   return { call, loading, error };
 }
 
-const HISTORY_STORAGE_KEY = "extension-calling.call-history.v1";
-const MAX_HISTORY_ENTRIES = 100;
-
-export interface TrackedCall {
-  callId: string;
-  from: string;
-  to: string;
-  direction: CallDirection;
-  status: CallStatus;
-  createdAt: string;
-}
-
-function readHistory(): TrackedCall[] {
-  try {
-    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as TrackedCall[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeHistory(entries: TrackedCall[]): void {
-  try {
-    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_HISTORY_ENTRIES)));
-  } catch {
-    // Best-effort only: browser storage may be unavailable (private mode, quota exceeded, etc).
-  }
-}
-
-interface UseCallHistoryResult {
-  history: TrackedCall[];
-  recordCall: (call: Omit<TrackedCall, "createdAt"> & { createdAt?: string }) => void;
-  updateCallStatus: (callId: string, status: CallStatus) => void;
+interface UseCallListResult {
+  calls: CallResponse[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
 }
 
 /**
- * Tracks calls created from this browser in localStorage (never a password
- * or other secret - calls have none). The backend does not currently expose
- * a call-list endpoint (see `callsApi.listCalls`), so this is a client-side
- * call log scoped to this browser, not a full server-side call history -
- * pages using it say so in their copy.
+ * Fetches `GET /api/v1/voice/calls` - real call history from the backend's
+ * `cdr` table, most recently started first. Only calls that have already
+ * completed appear here; a call still in progress isn't archived yet (see
+ * the backend's `PersistentCallRepository`), so it won't show up until it
+ * hangs up - `useCallPolling` is what tracks a single call's live status.
  */
-export function useCallHistory(): UseCallHistoryResult {
-  const [history, setHistory] = useState<TrackedCall[]>(() => readHistory());
+export function useCallList(): UseCallListResult {
+  const [calls, setCalls] = useState<CallResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const recordCall = useCallback<UseCallHistoryResult["recordCall"]>((call) => {
-    setHistory((prev) => {
-      const next: TrackedCall[] = [
-        { ...call, createdAt: call.createdAt ?? new Date().toISOString() },
-        ...prev.filter((entry) => entry.callId !== call.callId),
-      ];
-      writeHistory(next);
-      return next;
-    });
+  const fetchList = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await callsApi.listCalls();
+      setCalls(data);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Failed to load call history.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const updateCallStatus = useCallback((callId: string, status: CallStatus) => {
-    setHistory((prev) => {
-      let changed = false;
-      const next = prev.map((entry) => {
-        if (entry.callId === callId && entry.status !== status) {
-          changed = true;
-          return { ...entry, status };
-        }
-        return entry;
-      });
-      if (changed) {
-        writeHistory(next);
-        return next;
-      }
-      return prev;
-    });
-  }, []);
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
 
-  return { history, recordCall, updateCallStatus };
+  return { calls, loading, error, refresh: fetchList };
 }

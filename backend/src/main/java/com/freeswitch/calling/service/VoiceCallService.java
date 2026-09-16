@@ -10,10 +10,12 @@ import com.freeswitch.calling.model.Call;
 import com.freeswitch.calling.model.CallDirection;
 import com.freeswitch.calling.model.CallStatus;
 import com.freeswitch.calling.repository.CallRepository;
+import com.freeswitch.calling.repository.PersistentCallRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,10 +31,13 @@ public class VoiceCallService {
 
     private final FreeSwitchClient freeSwitchClient;
     private final CallRepository callRepository;
+    private final PersistentCallRepository cdrRepository;
 
-    public VoiceCallService(FreeSwitchClient freeSwitchClient, CallRepository callRepository) {
+    public VoiceCallService(FreeSwitchClient freeSwitchClient, CallRepository callRepository,
+                             PersistentCallRepository cdrRepository) {
         this.freeSwitchClient = freeSwitchClient;
         this.callRepository = callRepository;
+        this.cdrRepository = cdrRepository;
     }
 
     public CreateCallResponse createOutboundCall(CreateCallRequest request) {
@@ -73,5 +78,13 @@ public class VoiceCallService {
         Call call = callRepository.findById(callId)
                 .orElseThrow(() -> new CallNotFoundException(callId));
         return CallResponse.from(call);
+    }
+
+    /**
+     * Call history from the {@code cdr} table, most recently started first.
+     * Only finished calls appear here - see {@link PersistentCallRepository#findCallHistory()}.
+     */
+    public List<CallResponse> listCalls() {
+        return cdrRepository.findCallHistory();
     }
 }
