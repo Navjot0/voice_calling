@@ -74,10 +74,20 @@ public class VoiceCallService {
         return new CreateCallResponse(call.getCallId(), call.getStatus(), call.getFrom(), call.getTo(), call.getDirection());
     }
 
+    /**
+     * A single call's snapshot, by ID. Checks the live, in-memory store
+     * first (so an in-progress call gets its current status); if the call
+     * isn't there - most likely because it finished and the application has
+     * since restarted, since {@link com.freeswitch.calling.repository.InMemoryCallRepository}
+     * doesn't survive a restart - falls back to the archived {@code cdr} row,
+     * so a completed call served up via {@link #listCalls()} always remains
+     * viewable by ID afterward too.
+     */
     public CallResponse getCall(String callId) {
-        Call call = callRepository.findById(callId)
+        return callRepository.findById(callId)
+                .map(CallResponse::from)
+                .or(() -> cdrRepository.findByCallId(callId))
                 .orElseThrow(() -> new CallNotFoundException(callId));
-        return CallResponse.from(call);
     }
 
     /**

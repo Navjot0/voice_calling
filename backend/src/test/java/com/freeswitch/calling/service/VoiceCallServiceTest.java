@@ -92,6 +92,21 @@ class VoiceCallServiceTest {
     }
 
     @Test
+    void getCall_fallsBackToCdrWhenNotInMemory() {
+        // Simulates a call that finished, was archived, and then fell out of
+        // the in-memory store (e.g. an application restart) - it must still
+        // be reachable by ID afterward, via the cdr archive.
+        CallResponse archived = new CallResponse("call-uuid-archived", CallStatus.COMPLETED, "1001", "1002",
+                CallDirection.OUTBOUND, java.time.Instant.now(), java.time.Instant.now(), java.time.Instant.now(),
+                42, 40);
+        when(cdrRepository.findByCallId("call-uuid-archived")).thenReturn(java.util.Optional.of(archived));
+
+        CallResponse result = voiceCallService.getCall("call-uuid-archived");
+
+        assertThat(result).isEqualTo(archived);
+    }
+
+    @Test
     void getCall_returnsFullLifecycleSnapshot() {
         CreateCallResponse created = voiceCallService.createOutboundCall(new CreateCallRequest("1001", "1002"));
 

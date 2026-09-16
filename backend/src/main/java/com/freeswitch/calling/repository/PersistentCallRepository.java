@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Archives a finished call into the pre-existing {@code cdr} table, exactly
@@ -89,5 +90,16 @@ public class PersistentCallRepository {
         return jpaRepository.findAll(Sort.by(Sort.Direction.DESC, "startStamp")).stream()
                 .map(CallResponse::from)
                 .toList();
+    }
+
+    /**
+     * A single archived call by its {@code uuid}. Used as the fallback for
+     * {@code GET /api/v1/voice/calls/{callId}} once a call has fallen out of
+     * the in-memory {@link CallRepository} - e.g. after an application
+     * restart, since {@link InMemoryCallRepository} doesn't survive one but
+     * the {@code cdr} row does.
+     */
+    public Optional<CallResponse> findByCallId(String callId) {
+        return jpaRepository.findById(callId).map(CallResponse::from);
     }
 }
