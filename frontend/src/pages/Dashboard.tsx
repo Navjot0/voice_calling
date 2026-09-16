@@ -5,7 +5,7 @@ import { Loading } from "../components/Loading";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
-import { formatDateTime, isProtectedExtension } from "../utils/formatters";
+import { formatDateTime, formatDuration, isProtectedExtension } from "../utils/formatters";
 
 export function Dashboard() {
   const { users, loading: usersLoading, error: usersError, refresh: refreshUsers } = useUsers();
@@ -85,6 +85,8 @@ export function Dashboard() {
                     <th>To</th>
                     <th>Status</th>
                     <th>Started</th>
+                    <th>Duration</th>
+                    <th>Billsec</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -99,6 +101,8 @@ export function Dashboard() {
                         <StatusBadge status={call.status} kind="call" />
                       </td>
                       <td data-label="Started">{formatDateTime(call.createdAt)}</td>
+                      <td data-label="Duration">{formatDuration(call.duration)}</td>
+                      <td data-label="Billsec">{formatDuration(call.billsec)}</td>
                     </tr>
                   ))}
                 </tbody>

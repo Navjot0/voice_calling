@@ -84,7 +84,7 @@ class VoiceCallControllerTest {
     void getCall_returnsSnapshotWhenFound() throws Exception {
         when(voiceCallService.getCall(eq("call-uuid-1"))).thenReturn(new CallResponse(
                 "call-uuid-1", CallStatus.ANSWERED, "1001", "1002", CallDirection.OUTBOUND,
-                Instant.parse("2026-09-14T10:00:00Z"), Instant.parse("2026-09-14T10:00:05Z"), null));
+                Instant.parse("2026-09-14T10:00:00Z"), Instant.parse("2026-09-14T10:00:05Z"), null, null, null));
 
         mockMvc.perform(get("/api/v1/voice/calls/call-uuid-1"))
                 .andExpect(status().isOk())
@@ -106,14 +106,17 @@ class VoiceCallControllerTest {
         when(voiceCallService.listCalls()).thenReturn(List.of(
                 new CallResponse("call-uuid-2", CallStatus.COMPLETED, "1001", "1002", CallDirection.OUTBOUND,
                         Instant.parse("2026-09-14T11:00:00Z"), Instant.parse("2026-09-14T11:00:05Z"),
-                        Instant.parse("2026-09-14T11:01:00Z")),
+                        Instant.parse("2026-09-14T11:01:00Z"), 60, 55),
                 new CallResponse("call-uuid-1", CallStatus.NO_ANSWER, "1001", "1003", CallDirection.OUTBOUND,
-                        Instant.parse("2026-09-14T10:00:00Z"), null, Instant.parse("2026-09-14T10:00:30Z"))));
+                        Instant.parse("2026-09-14T10:00:00Z"), null, Instant.parse("2026-09-14T10:00:30Z"), 30, 0)));
 
         mockMvc.perform(get("/api/v1/voice/calls"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)))
                 .andExpect(jsonPath("$[0].callId").value("call-uuid-2"))
-                .andExpect(jsonPath("$[1].status").value("NO_ANSWER"));
+                .andExpect(jsonPath("$[0].duration").value(60))
+                .andExpect(jsonPath("$[0].billsec").value(55))
+                .andExpect(jsonPath("$[1].status").value("NO_ANSWER"))
+                .andExpect(jsonPath("$[1].billsec").value(0));
     }
 }

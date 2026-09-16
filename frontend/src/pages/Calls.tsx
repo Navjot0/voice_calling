@@ -5,7 +5,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { Loading } from "../components/Loading";
-import { formatDateTime } from "../utils/formatters";
+import { formatDateTime, formatDuration } from "../utils/formatters";
 import type { CallStatus } from "../types/call";
 
 const STATUS_OPTIONS: Array<CallStatus | "ALL"> = ["ALL", "COMPLETED", "FAILED", "BUSY", "NO_ANSWER"];
@@ -91,6 +91,8 @@ export function Calls() {
                   <th>To</th>
                   <th>Status</th>
                   <th>Started</th>
+                  <th>Duration</th>
+                  <th>Billsec</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -106,6 +108,8 @@ export function Calls() {
                       <StatusBadge status={call.status} kind="call" />
                     </td>
                     <td data-label="Started">{formatDateTime(call.createdAt)}</td>
+                    <td data-label="Duration">{formatDuration(call.duration)}</td>
+                    <td data-label="Billsec">{formatDuration(call.billsec)}</td>
                     <td data-label="Actions">
                       <Link to={`/calls/${call.callId}`} className="btn btn-small">
                         View

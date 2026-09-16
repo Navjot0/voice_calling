@@ -5,6 +5,7 @@ import com.freeswitch.calling.model.Call;
 import com.freeswitch.calling.model.CallDirection;
 import com.freeswitch.calling.model.CallStatus;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -12,6 +13,11 @@ import java.time.Instant;
  * live-tracked call) and {@code GET /api/v1/voice/calls} (call history, one
  * entry per archived {@code cdr} row) - the full lifecycle snapshot of a
  * call either way.
+ *
+ * <p>{@code duration} (total elapsed seconds, start to end) and
+ * {@code billsec} (billable seconds, answer to end - {@code 0} if never
+ * answered) are only meaningful once a call has ended, so both are
+ * {@code null} while a call is still in progress.
  */
 public record CallResponse(
         String callId,
@@ -21,18 +27,36 @@ public record CallResponse(
         CallDirection direction,
         Instant createdAt,
         Instant answeredAt,
-        Instant completedAt
+        Instant completedAt,
+        Integer duration,
+        Integer billsec
 ) {
     public static CallResponse from(Call call) {
+        Instant start = call.getCreatedAt();
+        Instant answered = call.getAnsweredAt();
+        Instant end = call.getCompletedAt();
+
+        // Mirrors the computation PersistentCallRepository.record() does when
+        // archiving to the cdr table, so a call reports the same duration/
+        // billsec here as it will once it's written to cdr.
+        Integer duration = (start != null && end != null)
+                ? (int) Duration.between(start, end).getSeconds()
+                : null;
+        Integer billsec = (end != null)
+                ? (answered != null ? (int) Duration.between(answered, end).getSeconds() : 0)
+                : null;
+
         return new CallResponse(
                 call.getCallId(),
                 call.getStatus(),
                 call.getFrom(),
                 call.getTo(),
                 call.getDirection(),
-                call.getCreatedAt(),
-                call.getAnsweredAt(),
-                call.getCompletedAt()
+                start,
+                answered,
+                end,
+                duration,
+                billsec
         );
     }
 
@@ -43,7 +67,9 @@ public record CallResponse(
      * recomputed via {@link CallStatus#resolveTerminal} from whether the row
      * has an answer_stamp and its hangup_cause - exactly reproducing the
      * determination {@code FreeSwitchEventListener} made when the call
-     * actually ended.
+     * actually ended. {@code duration}/{@code billsec} are read straight off
+     * the row, since {@code PersistentCallRepository} already computed them
+     * at archival time.
      */
     public static CallResponse from(CallEntity entity) {
         CallStatus status = CallStatus.resolveTerminal(entity.getAnswerStamp() != null, entity.getHangupCause());
@@ -55,7 +81,9 @@ public record CallResponse(
                 CallDirection.OUTBOUND,
                 entity.getStartStamp(),
                 entity.getAnswerStamp(),
-                entity.getEndStamp()
+                entity.getEndStamp(),
+                entity.getDuration(),
+                entity.getBillsec()
         );
     }
 }

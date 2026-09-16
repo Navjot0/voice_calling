@@ -107,7 +107,8 @@ class VoiceCallServiceTest {
     @Test
     void listCalls_delegatesToCdrRepository() {
         CallResponse historical = new CallResponse("call-uuid-9", CallStatus.COMPLETED, "1001", "1002",
-                CallDirection.OUTBOUND, java.time.Instant.now(), java.time.Instant.now(), java.time.Instant.now());
+                CallDirection.OUTBOUND, java.time.Instant.now(), java.time.Instant.now(), java.time.Instant.now(),
+                42, 40);
         when(cdrRepository.findCallHistory()).thenReturn(List.of(historical));
 
         List<CallResponse> result = voiceCallService.listCalls();

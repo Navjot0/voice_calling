@@ -37,3 +37,14 @@ export function formatDateTime(value: string | null | undefined): string {
     timeStyle: "medium",
   });
 }
+
+/** Formats a whole-second duration as "Xm Ys" (or "Ys" under a minute), or an em dash if absent. */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds)) {
+    return "—";
+  }
+  const total = Math.max(0, Math.trunc(seconds));
+  const minutes = Math.floor(total / 60);
+  const remainingSeconds = total % 60;
+  return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
+}

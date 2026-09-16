@@ -3,7 +3,7 @@ import { useCallPolling } from "../hooks/useCalls";
 import { Loading } from "../components/Loading";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { StatusBadge } from "../components/StatusBadge";
-import { formatDateTime } from "../utils/formatters";
+import { formatDateTime, formatDuration } from "../utils/formatters";
 import { isTerminalCallStatus } from "../types/call";
 
 export function CallDetails() {
@@ -65,6 +65,14 @@ export function CallDetails() {
             <div>
               <dt>Completed At</dt>
               <dd>{formatDateTime(call.completedAt)}</dd>
+            </div>
+            <div>
+              <dt>Duration</dt>
+              <dd>{formatDuration(call.duration)}</dd>
+            </div>
+            <div>
+              <dt>Billsec</dt>
+              <dd>{formatDuration(call.billsec)}</dd>
             </div>
           </dl>
 

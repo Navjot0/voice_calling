@@ -45,6 +45,8 @@ export interface CreateCallResponse {
  * Response body for `GET /api/v1/voice/calls/{callId}` (`CallResponse`).
  * Timestamps are ISO-8601 strings (Java `Instant` serialized by Jackson).
  * `answeredAt` / `completedAt` are `null` until the call reaches that point.
+ * `duration` (total seconds, start to end) and `billsec` (billable seconds,
+ * answer to end - `0` if never answered) are `null` until the call ends.
  */
 export interface CallResponse {
   callId: string;
@@ -55,4 +57,6 @@ export interface CallResponse {
   createdAt: string;
   answeredAt: string | null;
   completedAt: string | null;
+  duration: number | null;
+  billsec: number | null;
 }
